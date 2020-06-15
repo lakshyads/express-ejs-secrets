@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const md5 = require('md5');
+const bcrypt = require('bcrypt');
 
 // const models
 const userModel = require('./models/userModel');
@@ -20,6 +20,7 @@ app.set('view engine', 'ejs');
 const port = process.env.PORT || 3001;
 const dbName = process.env.DB_NAME || 'secretsDB';
 const dbString = process.env.DB_STRING || `mongodb://localhost:27017/${dbName}`;
+const saltRounds = process.env.SALT_ROUNDS ;
 
 // Connect DB -----------
 mongoose.connect(dbString, { useNewUrlParser: true, useUnifiedTopology: true }, err => {
@@ -36,10 +37,10 @@ app.get('/', (req, res) => {
 });
 
 app.route('/login').
-    get((req, res) => {
+    get(async (req, res) => {
         res.render('login');
     }).
-    post((req, res) => {
+    post(async (req, res) => {
         const username = req.body.username;
         const password = req.body.password;
 
@@ -49,9 +50,12 @@ app.route('/login').
             }
             else {
                 if (docs) {
-                    if (docs.password === md5(password)) {
-                        res.render("secrets");
-                    }
+                    bcrypt.compare(password,docs.password).then(isMatch => {
+                        if (isMatch) {
+                            res.render("secrets");
+                        }
+                    });
+                    
                 }
             }
         });
@@ -59,27 +63,35 @@ app.route('/login').
     });
 
 app.route('/register').
-    get((req, res) => {
+    get(async (req, res) => {
         res.render('register');
     }).
-    post((req, res) => {
+    post(async (req, res) => {
         const userEmail = req.body.username || null;
         const userPassword = req.body.password || null;
 
         if (userEmail && userPassword) {
-            const newUser = new userModel({
-                email: userEmail,
-                password: md5(userPassword)
-            });
-
-            newUser.save((err) => {
+            bcrypt.hash(userPassword, parseInt(saltRounds), (err, hash) => {
                 if (err) {
-                    console.log(`Registration failed for user ${userEmail}`, err);
+                    console.log(`Error hashing password: `, err);
+
                 }
                 else {
-                    res.render('secrets');
+                    const newUser = new userModel({
+                        email: userEmail,
+                        password: hash
+                    });
+
+                    newUser.save((err) => {
+                        if (err) {
+                            console.log(`Registration failed for user ${userEmail}`, err);
+                        }
+                        else {
+                            res.render('secrets');
+                        }
+                    });
                 }
-            });
+            })
         }
 
 
