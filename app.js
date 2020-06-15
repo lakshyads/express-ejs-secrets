@@ -1,4 +1,5 @@
 //jshint esversion:6
+require('dotenv').config();
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
@@ -14,8 +15,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.set('view engine', 'ejs');
 
-const port = process.env.PORT || 3000;
-const dbName = process.env.DB_Name || 'secretsDB';
+// Load environment variables
+const port = process.env.PORT || 3001;
+const dbName = process.env.DB_NAME || 'secretsDB';
 const dbString = process.env.DB_STRING || `mongodb://localhost:27017/${dbName}`;
 
 // Connect DB -----------
@@ -52,8 +54,8 @@ app.route('/login').
                 }
             }
         });
-        
-    })
+
+    });
 
 app.route('/register').
     get((req, res) => {
@@ -80,10 +82,10 @@ app.route('/register').
         }
 
 
-    })
+    });
 
 // Fire up the server -----------
 app.listen(port, () => {
     console.log('Server is running on port ' + port);
 
-})
+});
