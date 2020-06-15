@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
+const md5 = require('md5');
 
 // const models
 const userModel = require('./models/userModel');
@@ -48,7 +49,7 @@ app.route('/login').
             }
             else {
                 if (docs) {
-                    if (docs.password === password) {
+                    if (docs.password === md5(password)) {
                         res.render("secrets");
                     }
                 }
@@ -68,7 +69,7 @@ app.route('/register').
         if (userEmail && userPassword) {
             const newUser = new userModel({
                 email: userEmail,
-                password: userPassword
+                password: md5(userPassword)
             });
 
             newUser.save((err) => {
