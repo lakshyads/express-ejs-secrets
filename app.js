@@ -3,10 +3,10 @@ require('dotenv').config();
 const express = require('express');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const session = require('express-session');
+const passport = require('passport');
 
-// const models
-const userModel = require('./models/userModel');
+
 
 const app = express();
 
@@ -20,7 +20,16 @@ app.set('view engine', 'ejs');
 const port = process.env.PORT || 3001;
 const dbName = process.env.DB_NAME || 'secretsDB';
 const dbString = process.env.DB_STRING || `mongodb://localhost:27017/${dbName}`;
-const saltRounds = process.env.SALT_ROUNDS ;
+
+// Configure session & Authentication
+app.use(session({
+    secret: 'thisIsSecret',
+    resave: false,
+    saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Connect DB -----------
 mongoose.connect(dbString, { useNewUrlParser: true, useUnifiedTopology: true }, err => {
@@ -28,8 +37,15 @@ mongoose.connect(dbString, { useNewUrlParser: true, useUnifiedTopology: true }, 
         console.log(`Error connecting to DB: `, err);
     else
         console.log(`Connected to MongoDB`);
-
 });
+mongoose.set('useCreateIndex', true);
+
+// const models
+const userModel = require('./models/userModel');
+passport.use(userModel.createStrategy());
+passport.serializeUser(userModel.serializeUser());
+passport.deserializeUser(userModel.deserializeUser());
+
 
 // Routes -----------
 app.get('/', (req, res) => {
@@ -41,64 +57,54 @@ app.route('/login').
         res.render('login');
     }).
     post(async (req, res) => {
-        const username = req.body.username;
-        const password = req.body.password;
-
-        userModel.findOne({ email: username }, (err, docs) => {
+        const newUser = new userModel({
+            username: req.body.username,
+            password: req.body.password
+        });
+        req.login(newUser, err => {
             if (err) {
-                console.log('Error verifying user: ', err);
-            }
-            else {
-                if (docs) {
-                    bcrypt.compare(password,docs.password).then(isMatch => {
-                        if (isMatch) {
-                            res.render("secrets");
-                        }
-                    });
-                    
-                }
+                console.log(err);
+
+            } else {
+                passport.authenticate('local',{successRedirect:'/secrets'})(req,res);
             }
         });
-
     });
+
+app.get('/secrets', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.render('secrets');
+    }
+    else {
+        res.redirect('login');
+    }
+})
 
 app.route('/register').
     get(async (req, res) => {
         res.render('register');
     }).
     post(async (req, res) => {
-        const userEmail = req.body.username || null;
-        const userPassword = req.body.password || null;
-
-        if (userEmail && userPassword) {
-            bcrypt.hash(userPassword, parseInt(saltRounds), (err, hash) => {
-                if (err) {
-                    console.log(`Error hashing password: `, err);
-
-                }
-                else {
-                    const newUser = new userModel({
-                        email: userEmail,
-                        password: hash
-                    });
-
-                    newUser.save((err) => {
-                        if (err) {
-                            console.log(`Registration failed for user ${userEmail}`, err);
-                        }
-                        else {
-                            res.render('secrets');
-                        }
-                    });
-                }
-            })
-        }
-
-
+        userModel.register({ username: req.body.username }, req.body.password, (err, user) => {
+            if (err) {
+                console.log(err);
+                res.redirect('/register');
+            } else {
+                passport.authenticate('local')(req, res, () => {
+                    res.redirect('/secrets');
+                });
+            }
+        });
     });
+
+app.get('/logout', (req, res) => {
+    req.logout();
+    res.redirect('/');
+})
 
 // Fire up the server -----------
 app.listen(port, () => {
     console.log('Server is running on port ' + port);
+    console.log(`Access URL: http://localhost:${port}`)
 
 });
